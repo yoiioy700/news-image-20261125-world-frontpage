@@ -101,18 +101,18 @@ function project(lon: number, lat: number, w: number, h: number): [number, numbe
   return [x, y];
 }
 
-export function renderWorldMapSvg(pins: MapPin[], width = 486, height = 144): string {
+export function renderWorldMapSvg(pins: MapPin[], width = 296, height = 178): string {
   const graticules: string[] = [];
   for (const lat of [-30, 0, 30, 60]) {
     const [, y] = project(0, lat, width, height);
     graticules.push(
-      `<line x1="0" y1="${y.toFixed(1)}" x2="${width}" y2="${y.toFixed(1)}" stroke="#CBD5DF" stroke-width="${lat === 0 ? '0.8' : '0.5'}" ${lat === 0 ? 'stroke-dasharray="3,2"' : ''} />`,
+      `<line x1="0" y1="${y.toFixed(1)}" x2="${width}" y2="${y.toFixed(1)}" stroke="#CBD5DF" stroke-width="${lat === 0 ? '0.8' : '0.45'}" ${lat === 0 ? 'stroke-dasharray="3,2"' : ''} />`,
     );
   }
   for (const lon of [-120, -60, 0, 60, 120]) {
     const [x] = project(lon, 0, width, height);
     graticules.push(
-      `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${height}" stroke="#CBD5DF" stroke-width="0.5" />`,
+      `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${height}" stroke="#CBD5DF" stroke-width="0.45" />`,
     );
   }
 
@@ -123,40 +123,43 @@ export function renderWorldMapSvg(pins: MapPin[], width = 486, height = 144): st
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(' ');
-    return `<polygon points="${pts}" fill="#DDD6C5" stroke="#8F8776" stroke-width="0.7" stroke-linejoin="round" />`;
+    return `<polygon points="${pts}" fill="#DDD6C5" stroke="#8C8473" stroke-width="0.7" stroke-linejoin="round" />`;
   }).join('\n');
 
-  // Anti-overlap offsets for clustered European / MENA / US pins
+  // Clean separation for the 11 illustrated hero pins (zero overlap, 300px legible!)
   const manualNudge: Record<number, [number, number]> = {
-    1: [-5, 3],
+    1: [3, 0],
+    2: [-2, -3],
+    3: [0, 0],
     4: [-8, -6],
-    5: [0, -5],
-    6: [7, 4],
-    8: [7, -2],
-    9: [8, -5],
-    13: [8, -4],
-    14: [-7, 6],
+    5: [-4, 2],
+    6: [6, 3],
+    7: [0, 2],
+    8: [8, -2],
+    9: [5, -1],
+    10: [0, 2],
+    11: [-2, 1],
   };
 
   const pinMarkup = pins
     .map((p) => {
       const [bx, by] = project(p.lon, p.lat, width, height);
       const [dx, dy] = manualNudge[p.pin] ?? [0, 0];
-      const x = Math.max(8, Math.min(width - 8, bx + dx));
-      const y = Math.max(8, Math.min(height - 8, by + dy));
+      const x = Math.max(9, Math.min(width - 9, bx + dx));
+      const y = Math.max(9, Math.min(height - 9, by + dy));
       const fill = BEAT_COLORS[p.beat];
       return `
         <g>
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.1" fill="${fill}" stroke="#F7F4EC" stroke-width="1.3" />
-          <text x="${x.toFixed(1)}" y="${(y + 2.4).toFixed(1)}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="6.9" font-weight="800" fill="#FFFFFF">${p.pin}</text>
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7.4" fill="${fill}" stroke="#F6F3EB" stroke-width="1.5" />
+          <text x="${x.toFixed(1)}" y="${(y + 2.9).toFixed(1)}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="8.4" font-weight="800" fill="#FFFFFF">${p.pin}</text>
         </g>
       `;
     })
     .join('\n');
 
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;">
-      <rect width="${width}" height="${height}" fill="#EAF0F4" />
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:${height}px;">
+      <rect width="${width}" height="${height}" fill="#E8EFF4" />
       ${graticules.join('\n')}
       ${paths}
       ${pinMarkup}

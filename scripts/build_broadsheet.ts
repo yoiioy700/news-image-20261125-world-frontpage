@@ -4,11 +4,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   EDITION_META,
+  KPI_STATS,
   LEAD_STORIES,
-  MARKET_METRICS,
-  TIMELINE_EVENTS,
+  REGION_BAR,
   WIRE_STORIES,
   type BeatCategory,
+  type EpistemicTag,
 } from '../src/stories.ts';
 import { renderWorldMapSvg, type MapPin } from '../src/world_map.ts';
 
@@ -27,6 +28,12 @@ const BEAT_COLORS: Record<BeatCategory, string> = {
   science: '#1B5E4B',
 };
 
+const STATUS_STYLE: Record<EpistemicTag, { bg: string; fg: string; border: string }> = {
+  OFFICIAL: { bg: '#E6F0EC', fg: '#15503E', border: '#8ABAA8' },
+  REPORTED: { bg: '#EBF0F7', fg: '#1D395E', border: '#A7BDD6' },
+  CLAIM: { bg: '#FDF0E6', fg: '#9A430D', border: '#DFAA80' },
+};
+
 function esc(s: string): string {
   return s
     .replaceAll('&', '&amp;')
@@ -42,83 +49,95 @@ function artDataUri(filename: string): string {
 }
 
 function buildPins(): MapPin[] {
-  const pins: MapPin[] = [];
-  for (const s of LEAD_STORIES) {
-    pins.push({ pin: s.pin, label: s.regionLabel, lat: s.lat, lon: s.lon, beat: s.beat });
-  }
-  for (const w of WIRE_STORIES) {
-    if (w.pin !== undefined && w.lat !== undefined && w.lon !== undefined) {
-      pins.push({ pin: w.pin, label: w.kicker, lat: w.lat, lon: w.lon, beat: w.beat });
-    }
-  }
-  return pins.sort((a, b) => a.pin - b.pin);
+  return LEAD_STORIES.map((s) => ({
+    pin: s.pin,
+    label: s.locationLabel,
+    lat: s.lat,
+    lon: s.lon,
+    beat: s.beat,
+  })).sort((a, b) => a.pin - b.pin);
 }
 
-function renderTimelineSvg(width = 492, height = 64): string {
-  const padX = 28;
-  const lineY = 33;
-  const span = width - padX * 2;
-  const count = TIMELINE_EVENTS.length;
+function statusBadge(tag: EpistemicTag, compact = false): string {
+  const st = STATUS_STYLE[tag];
+  return `<span class="ep-badge ${compact ? 'ep-sm' : ''}" style="background:${st.bg};color:${st.fg};border-color:${st.border}">${tag}</span>`;
+}
 
-  const ticks = TIMELINE_EVENTS.map((ev, idx) => {
-    const x = padX + (idx / (count - 1)) * span;
-    const above = idx % 2 === 0;
-    const color = BEAT_COLORS[ev.beat];
-    const stemY = above ? lineY - 9 : lineY + 9;
-    const utcY = above ? lineY - 21 : lineY + 17;
-    const lblY = above ? lineY - 12 : lineY + 26;
-    return `
-      <g>
-        <line x1="${x.toFixed(1)}" y1="${lineY}" x2="${x.toFixed(1)}" y2="${stemY}" stroke="${color}" stroke-width="1.3" />
-        <circle cx="${x.toFixed(1)}" cy="${lineY}" r="3.6" fill="${color}" stroke="#F7F4EC" stroke-width="1.2" />
-        <text x="${x.toFixed(1)}" y="${utcY}" text-anchor="middle" font-family="Consolas, Segoe UI, monospace" font-size="7.7" font-weight="800" fill="${color}">${esc(ev.utc)}</text>
-        <text x="${x.toFixed(1)}" y="${lblY}" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="8.0" font-weight="700" fill="#11151C">${esc(ev.label)}</text>
-      </g>
-    `;
-  }).join('\n');
-
+function renderDhakaWageSvg(): string {
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;">
-      <line x1="${padX - 6}" y1="${lineY}" x2="${width - padX + 4}" y2="${lineY}" stroke="#1A365D" stroke-width="1.8" />
-      <polygon points="${width - padX + 9},${lineY} ${width - padX + 3},${lineY - 3.2} ${width - padX + 3},${lineY + 3.2}" fill="#1A365D" />
-      ${ticks}
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 234 58" style="width:100%;height:100%;display:block;background:#F4EFE3;">
+      <defs>
+        <pattern id="weave" width="8" height="8" patternUnits="userSpaceOnUse">
+          <path d="M0 4 H8 M4 0 V8" stroke="#E5DEC9" stroke-width="0.7"/>
+        </pattern>
+      </defs>
+      <rect width="234" height="58" fill="url(#weave)" />
+      <path d="M0 48 Q46 36 92 43 T180 24 L234 15 L234 58 L0 58 Z" fill="#1F5E52" opacity="0.18"/>
+      <path d="M6 48 Q52 38 100 43 T186 24 L234 16" fill="none" stroke="#1F5E52" stroke-width="2.0" stroke-dasharray="5,3"/>
+      <!-- Old wage bar -->
+      <rect x="26" y="31" width="36" height="22" rx="1.5" fill="#1A365D" stroke="#0E1726" stroke-width="1"/>
+      <text x="44" y="27" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.4" font-weight="800" fill="#334155">12,500৳</text>
+      <text x="44" y="45" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="6.8" font-weight="700" fill="#E2E8F0">OLD</text>
+      <!-- Arrow -->
+      <path d="M67 37 L85 26" stroke="#9B1C1C" stroke-width="2.1" fill="none" stroke-linecap="round"/>
+      <polygon points="89,23 81,23 86,30" fill="#9B1C1C"/>
+      <text x="76" y="21" text-anchor="middle" font-family="Georgia, serif" font-size="9.2" font-weight="800" fill="#9B1C1C">+36%</text>
+      <!-- New wage bar -->
+      <rect x="94" y="17" width="44" height="36" rx="1.5" fill="#C47D2B" stroke="#0E1726" stroke-width="1"/>
+      <text x="116" y="13.5" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.8" font-weight="800" fill="#11151C">17,000৳</text>
+      <text x="116" y="38" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="7.2" font-weight="800" fill="#FFFFFF">$136/MO</text>
+      <!-- Thread bobbin & coins clear of bottom-right ribbon -->
+      <rect x="150" y="9" width="16" height="22" rx="2" fill="#A62626" stroke="#11151C" stroke-width="1"/>
+      <rect x="147" y="6" width="22" height="3.5" rx="1" fill="#1A365D" stroke="#11151C" stroke-width="0.9"/>
+      <rect x="147" y="30" width="22" height="3.5" rx="1" fill="#1A365D" stroke="#11151C" stroke-width="0.9"/>
+      <ellipse cx="192" cy="24" rx="11" ry="3.5" fill="#C47D2B" stroke="#11151C" stroke-width="0.9"/>
+      <ellipse cx="192" cy="19.5" rx="11" ry="3.5" fill="#D99B43" stroke="#11151C" stroke-width="0.9"/>
+      <ellipse cx="192" cy="15" rx="11" ry="3.5" fill="#E6B25E" stroke="#11151C" stroke-width="0.9"/>
     </svg>
   `;
+}
+
+function artOrSvg(artFile: string, alt: string, pos?: string): string {
+  if (artFile === '11_dhaka_wage.png') {
+    return renderDhakaWageSvg();
+  }
+  return `<img class="sec-art" src="${artDataUri(artFile)}" style="object-position:${pos ?? 'center'}" alt="${esc(alt)}" />`;
 }
 
 function renderHtml(): string {
   const flagships = LEAD_STORIES.filter((s) => s.tier === 'flagship');
   const secondaries = LEAD_STORIES.filter((s) => s.tier === 'secondary');
-  const mapSvg = renderWorldMapSvg(buildPins(), 482, 138);
-  const timelineSvg = renderTimelineSvg(492, 64);
+  const mapSvg = renderWorldMapSvg(buildPins(), 296, 178);
 
-  const columns: Array<{ key: 'americas' | 'europe' | 'mena_africa' | 'asia_global'; title: string; accent: string }> = [
-    { key: 'americas', title: 'AMERICAS · NORTH & LATIN', accent: '#1A365D' },
-    { key: 'europe', title: 'EUROPE & EURASIA', accent: '#2B4C7E' },
-    { key: 'mena_africa', title: 'MIDDLE EAST & AFRICA', accent: '#9B1C1C' },
-    { key: 'asia_global', title: 'ASIA-PACIFIC · HEALTH · SCIENCE', accent: '#1B5E4B' },
-  ];
+  const regionBarHtml = REGION_BAR.map(
+    (r) => `<div class="reg-seg" style="flex:${r.count};background:${r.color}">${esc(r.label)}</div>`,
+  ).join('');
+
+  const kpiHtml = KPI_STATS.map(
+    (k) => `
+      <div class="kpi-card" style="border-top-color:${k.accent}">
+        <div class="kpi-big" style="color:${k.accent}">${esc(k.big)}</div>
+        <div class="kpi-desc">${esc(k.desc)}</div>
+      </div>
+    `,
+  ).join('');
 
   const flagshipHtml = flagships
     .map((s) => {
       const color = BEAT_COLORS[s.beat];
       return `
-        <article class="flagship-card">
-          <div class="flagship-art-wrap">
-            <img class="flagship-art" src="${artDataUri(s.artFile)}" alt="${esc(s.headline)}" />
-            <span class="pin-badge" style="background:${color}">${s.pin}</span>
+        <article class="hero-card">
+          <div class="hero-art-box">
+            <img class="hero-art" src="${artDataUri(s.artFile)}" style="object-position:${s.artPos ?? 'center'}" alt="${esc(s.headline)}" />
+            <span class="pin-circle" style="background:${color}">${s.pin}</span>
+            <span class="stat-ribbon">${esc(s.statTag)}</span>
           </div>
-          <div class="flagship-body">
-            <div class="meta-row">
-              <span class="beat-pill" style="background:${color}">${esc(s.regionLabel)}</span>
-              <span class="status-tag">${esc(s.status)} · ${esc(s.utc)}</span>
-            </div>
-            <h2 class="flagship-headline">${esc(s.headline)}</h2>
-            <ul class="flagship-list">
-              ${s.bullets.map((b) => `<li>${esc(b)}</li>`).join('')}
-            </ul>
-            <div class="source-line">Source: ${esc(s.source)}</div>
+          <div class="card-meta">
+            <span class="loc-tag" style="color:${color}">${esc(s.locationLabel)}</span>
+            ${statusBadge(s.status)}
           </div>
+          <h2 class="hero-h">${esc(s.headline)}</h2>
+          <p class="hero-p">${esc(s.summary)} <span class="src-inline">(${esc(s.source)})</span></p>
         </article>
       `;
     })
@@ -129,61 +148,36 @@ function renderHtml(): string {
       const color = BEAT_COLORS[s.beat];
       return `
         <article class="sec-card">
-          <div class="sec-art-wrap">
-            <img class="sec-art" src="${artDataUri(s.artFile)}" alt="${esc(s.headline)}" />
-            <span class="pin-badge pin-sm" style="background:${color}">${s.pin}</span>
+          <div class="sec-art-box">
+            ${artOrSvg(s.artFile, s.headline, s.artPos)}
+            <span class="pin-circle pin-sm" style="background:${color}">${s.pin}</span>
+            <span class="stat-ribbon rib-sm">${esc(s.statTag)}</span>
           </div>
-          <div class="sec-body">
-            <div class="meta-row meta-tight">
-              <span class="beat-pill pill-sm" style="background:${color}">${esc(s.regionLabel)}</span>
-              <span class="status-tag status-sm">${esc(s.status)}</span>
-            </div>
-            <h3 class="sec-headline">${esc(s.headline)}</h3>
-            <p class="sec-text">${esc(s.bullets.join(' '))}</p>
-            <div class="source-line src-sm">${esc(s.source)} · ${esc(s.utc)}</div>
+          <div class="card-meta meta-sm">
+            <span class="loc-sm" style="color:${color}">${esc(s.locationLabel)}</span>
+            ${statusBadge(s.status, true)}
           </div>
+          <h3 class="sec-h">${esc(s.headline)}</h3>
+          <p class="sec-p">${esc(s.summary)} <span class="src-inline">(${esc(s.source)})</span></p>
         </article>
       `;
     })
     .join('\n');
 
-  const metricsHtml = MARKET_METRICS.map((m) => {
-    const cls = m.direction === 'down' ? 'm-down' : m.direction === 'up' ? 'm-up' : 'm-warn';
-    return `
-      <div class="metric-tile ${cls}">
-        <div class="m-lbl">${esc(m.label)}</div>
-        <div class="m-val">${esc(m.value)}</div>
-        <div class="m-delta">${esc(m.delta)}</div>
-      </div>
-    `;
-  }).join('\n');
+  const leftWire = WIRE_STORIES.slice(0, 11);
+  const rightWire = WIRE_STORIES.slice(11, 22);
 
-  const ledgerHtml = columns
-    .map((col) => {
-      const items = WIRE_STORIES.filter((w) => w.column === col.key);
-      return `
-        <section class="wire-col">
-          <div class="wire-col-hdr" style="border-top-color:${col.accent}; color:${col.accent};">${esc(col.title)}</div>
-          <div class="wire-items">
-            ${items
-              .map((w) => {
-                const pinSpan =
-                  w.pin !== undefined
-                    ? `<span class="inline-pin" style="background:${BEAT_COLORS[w.beat]}">${w.pin}</span>`
-                    : '';
-                return `
-                  <div class="wire-item">
-                    <div class="wire-h">${pinSpan}<span class="wire-kicker">${esc(w.kicker)}:</span> ${esc(w.headline)}</div>
-                    <div class="wire-d">${esc(w.detail)} <span class="wire-src">[${esc(w.source)}]</span></div>
-                  </div>
-                `;
-              })
-              .join('')}
+  const renderWireCol = (items: typeof WIRE_STORIES) =>
+    items
+      .map((w) => {
+        const badge = w.status === 'CLAIM' ? ` ${statusBadge('CLAIM', true)}` : '';
+        return `
+          <div class="w-row">
+            <span class="w-num">${w.num}</span><strong class="w-place">${esc(w.place)}:</strong> ${esc(w.text)}${badge} <span class="w-src">(${esc(w.source)})</span>
           </div>
-        </section>
-      `;
-    })
-    .join('\n');
+        `;
+      })
+      .join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -195,215 +189,262 @@ function renderHtml(): string {
     width: 1024px;
     height: 1024px;
     overflow: hidden;
-    background: #F7F4EC;
+    background: #F6F3EB;
     color: #11151C;
-    font-family: 'Segoe UI', 'Calibri', Arial, sans-serif;
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   .page {
     width: 1024px;
     height: 1024px;
-    padding: 9px 10px 8px 10px;
+    padding: 8px 10px 7px 10px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    background: #F7F4EC;
+    gap: 5px;
+    background: #F6F3EB;
   }
 
-  /* BAND 1: MASTHEAD */
-  .masthead {
-    height: 66px;
-    background: #12233B;
-    color: #F7F4EC;
-    padding: 7px 12px 6px 12px;
+  /* MASTHEAD */
+  .mast-top {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    border-bottom: 3px solid #C4892B;
-  }
-  .mast-left {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .mast-eyebrow {
     font-size: 9.2px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    color: #E5BE73;
-    text-transform: uppercase;
-  }
-  .mast-date {
-    font-family: Georgia, Cambria, 'Times New Roman', serif;
-    font-size: 31px;
-    font-weight: 700;
-    line-height: 1.02;
-    letter-spacing: 0.4px;
-    color: #FFFFFF;
-  }
-  .mast-right {
-    text-align: right;
-    border-left: 1px solid rgba(229, 190, 115, 0.45);
-    padding-left: 11px;
-    max-width: 292px;
-  }
-  .mast-stats {
-    font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.4px;
-    color: #FFFFFF;
-    margin-bottom: 2px;
+    letter-spacing: 0.85px;
+    color: #9B1C1C;
+    border-bottom: 1px solid #C8C0AE;
+    padding-bottom: 1.5px;
   }
-  .mast-audit {
-    font-size: 8.6px;
-    line-height: 1.24;
-    color: #D7E0EC;
+  .mast-top-r { color: #1A365D; letter-spacing: 0.55px; }
+  .mast-title {
+    font-family: Georgia, Cambria, 'Times New Roman', serif;
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 0.95;
+    text-align: center;
+    letter-spacing: -0.7px;
+    color: #0D121A;
+    margin: 1px 0 1px 0;
+  }
+  .mast-deck {
+    font-family: Georgia, Cambria, serif;
+    font-size: 11.4px;
+    font-weight: 700;
+    text-align: center;
+    color: #8C1D18;
+    border-top: 1px solid #D4CCB8;
+    border-bottom: 2px solid #11151C;
+    padding: 2px 0 2.5px 0;
   }
 
-  /* BAND 2: FLAGSHIP ROW */
-  .flagship-row {
-    height: 158px;
+  /* KPI ROW + REGION + UTC STRIP */
+  .kpi-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+    height: 46px;
   }
-  .flagship-card {
+  .kpi-card {
+    background: #FFFFFF;
+    border: 1px solid #C6BEAD;
+    border-top: 3px solid #1A365D;
+    padding: 2.5px 5.5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .kpi-big {
+    font-family: Georgia, Cambria, serif;
+    font-size: 16.5px;
+    font-weight: 800;
+    line-height: 1.04;
+  }
+  .kpi-desc {
+    font-size: 8.1px;
+    line-height: 1.12;
+    color: #242D3B;
+    font-weight: 600;
+  }
+  .strip-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5px;
+  }
+  .reg-bar {
+    display: flex;
+    height: 14px;
+    gap: 1.5px;
+  }
+  .reg-seg {
+    color: #FFFFFF;
+    font-size: 7.5px;
+    font-weight: 800;
+    letter-spacing: 0.25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .utc-bar {
+    background: #12233B;
+    color: #F7F4EC;
+    font-size: 8.6px;
+    font-weight: 700;
+    padding: 2.5px 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .utc-tag {
+    background: #B42318;
+    color: #FFFFFF;
+    font-size: 7.8px;
+    font-weight: 800;
+    padding: 0.5px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+  }
+
+  /* HERO TRIO (3 LARGE ILLUSTRATED CARDS) */
+  .hero-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+    height: 204px;
+  }
+  .hero-card {
     background: #FFFFFF;
     border: 1px solid #C2BAA8;
-    border-top: 2.5px solid #12233B;
-    padding: 6px;
+    padding: 5px 6px;
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    justify-content: space-between;
     overflow: hidden;
   }
-  .flagship-art-wrap {
+  .hero-art-box {
     position: relative;
-    width: 142px;
-    height: 142px;
-    flex-shrink: 0;
+    width: 100%;
+    height: 98px;
     border: 1px solid #1E293B;
     overflow: hidden;
-    background: #F7F4EC;
+    background: #12233B;
   }
-  .flagship-art {
+  .hero-art {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
-  .flagship-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    min-width: 0;
-  }
-  .meta-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 4px;
-    margin-bottom: 2px;
-  }
-  .beat-pill {
-    font-size: 7.8px;
-    font-weight: 800;
-    letter-spacing: 0.55px;
-    color: #FFFFFF;
-    padding: 1.5px 5px;
-    border-radius: 2px;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-  .status-tag {
-    font-family: Consolas, 'Segoe UI', monospace;
-    font-size: 7.6px;
-    font-weight: 700;
-    color: #475569;
-    white-space: nowrap;
-  }
-  .flagship-headline {
-    font-family: Georgia, Cambria, serif;
-    font-size: 15.8px;
-    font-weight: 700;
-    line-height: 1.12;
-    color: #11151C;
-    margin-bottom: 3px;
-  }
-  .flagship-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 2.2px;
-  }
-  .flagship-list li {
-    font-size: 9.35px;
-    line-height: 1.22;
-    color: #1F2937;
-    padding-left: 8px;
-    position: relative;
-  }
-  .flagship-list li::before {
-    content: '▪';
+  .stat-ribbon {
     position: absolute;
-    left: 0;
-    top: 0;
-    color: #9B1C1C;
-    font-size: 8px;
+    bottom: 3px;
+    right: 3px;
+    background: rgba(14, 24, 42, 0.90);
+    color: #FFFFFF;
+    font-size: 8.8px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    padding: 2px 6px;
+    border-radius: 2px;
   }
-  .source-line {
-    font-size: 7.8px;
-    font-weight: 700;
-    color: #57606F;
-    margin-top: 2px;
+  .rib-sm {
+    font-size: 8.2px;
+    padding: 1.5px 5px;
+    bottom: 2.5px;
+    right: 2.5px;
   }
-  .pin-badge {
+  .pin-circle {
     position: absolute;
     top: 4px;
     left: 4px;
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
     border-radius: 50%;
     color: #FFFFFF;
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1.5px solid #F7F4EC;
+    border: 1.5px solid #F6F3EB;
   }
-  .pin-sm {
-    width: 16px;
-    height: 16px;
-    font-size: 9px;
-    top: 3px;
-    left: 3px;
+  .pin-sm { width: 17px; height: 17px; font-size: 9.2px; top: 3px; left: 3px; }
+  .card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2px;
+  }
+  .meta-sm { margin-top: 1.5px; }
+  .loc-tag {
+    font-size: 8.1px;
+    font-weight: 800;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+  }
+  .loc-sm {
+    font-size: 7.4px;
+    font-weight: 800;
+    letter-spacing: 0.25px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ep-badge {
+    font-family: Consolas, 'Segoe UI', monospace;
+    font-size: 7.3px;
+    font-weight: 800;
+    padding: 0.5px 4.5px;
+    border: 1px solid;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .ep-sm { font-size: 6.7px; padding: 0 3.5px; }
+  .hero-h {
+    font-family: Georgia, Cambria, serif;
+    font-size: 15.2px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #0E131B;
+  }
+  .hero-p {
+    font-size: 9.5px;
+    line-height: 1.18;
+    color: #1F2937;
+  }
+  .src-inline {
+    font-size: 8.1px;
+    font-weight: 700;
+    color: #64748B;
   }
 
-  /* BAND 3: SIX SECONDARY ILLUSTRATED CARDS */
-  .secondary-grid {
-    height: 224px;
+  /* 8 SECONDARY ILLUSTRATED CARDS (2 ROWS x 4 COLS) */
+  .sec-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(2, 109px);
-    gap: 6px 8px;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 134px);
+    gap: 6px;
+    height: 274px;
   }
   .sec-card {
     background: #FFFFFF;
     border: 1px solid #C2BAA8;
-    padding: 5px;
+    padding: 4.5px 5.5px;
     display: flex;
-    gap: 7px;
+    flex-direction: column;
+    justify-content: space-between;
     overflow: hidden;
   }
-  .sec-art-wrap {
+  .sec-art-box {
     position: relative;
-    width: 97px;
-    height: 97px;
-    flex-shrink: 0;
-    border: 1px solid #2C3545;
+    width: 100%;
+    height: 58px;
+    border: 1px solid #263143;
     overflow: hidden;
-    background: #F7F4EC;
+    background: #F6F3EB;
   }
   .sec-art {
     width: 100%;
@@ -411,266 +452,172 @@ function renderHtml(): string {
     object-fit: cover;
     display: block;
   }
-  .sec-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    min-width: 0;
-  }
-  .meta-tight { margin-bottom: 1px; }
-  .pill-sm { font-size: 7.2px; padding: 1px 4px; }
-  .status-sm { font-size: 7px; }
-  .sec-headline {
+  .sec-h {
     font-family: Georgia, Cambria, serif;
-    font-size: 12.1px;
+    font-size: 11.6px;
     font-weight: 700;
-    line-height: 1.13;
-    color: #11151C;
-    margin-bottom: 2px;
+    line-height: 1.1;
+    color: #0E131B;
   }
-  .sec-text {
-    font-size: 8.55px;
-    line-height: 1.19;
-    color: #26303F;
-  }
-  .src-sm { font-size: 7.2px; }
-
-  /* BAND 4: WORLD PIN MAP + MARKETS & TIMELINE */
-  .mid-band {
-    height: 158px;
-    display: grid;
-    grid-template-columns: 492px 1fr;
-    gap: 8px;
-  }
-  .panel-box {
-    background: #FFFFFF;
-    border: 1px solid #C2BAA8;
-    padding: 4px 5px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    overflow: hidden;
-  }
-  .panel-hdr {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    white-space: nowrap;
-    font-size: 8.3px;
-    font-weight: 800;
-    letter-spacing: 0.55px;
-    color: #12233B;
-    border-bottom: 1px solid #D6CFC0;
-    padding-bottom: 2px;
-    margin-bottom: 2px;
-    text-transform: uppercase;
-  }
-  .legend-inline {
-    display: flex;
-    gap: 6px;
-    font-size: 7.3px;
-    font-weight: 700;
-    letter-spacing: 0.1px;
-    text-transform: none;
-    color: #334155;
-  }
-  .lg-dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    margin-right: 2px;
-    vertical-align: middle;
-  }
-  .right-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .markets-panel { height: 71px; }
-  .timeline-panel { height: 82px; }
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
-  }
-  .metric-tile {
-    background: #F7F4EC;
-    border: 1px solid #D5CEBE;
-    border-top: 2.5px solid #1A365D;
-    padding: 2px 3px;
-    text-align: center;
-  }
-  .metric-tile.m-down { border-top-color: #B42318; }
-  .metric-tile.m-up { border-top-color: #1B5E4B; }
-  .metric-tile.m-warn { border-top-color: #B45309; }
-  .m-lbl { font-size: 7.3px; font-weight: 800; color: #475569; letter-spacing: 0.3px; }
-  .m-val { font-size: 11px; font-weight: 800; color: #11151C; line-height: 1.1; }
-  .m-delta { font-size: 8.4px; font-weight: 800; line-height: 1.08; }
-  .m-down .m-delta { color: #9B1C1C; }
-  .m-up .m-delta { color: #1B5E4B; }
-  .m-warn .m-delta { color: #9A5B13; }
-  .tape-line {
-    font-size: 7.5px;
-    font-weight: 700;
-    color: #334155;
-    text-align: center;
-    margin-top: 1px;
+  .sec-p {
+    font-size: 8.85px;
+    line-height: 1.16;
+    color: #242D3B;
   }
 
-  /* BAND 5: GLOBAL WIRE LEDGER (4 COLUMNS) */
-  .ledger-grid {
+  /* BOTTOM BAND: BIG-PIN MAP + 2 WIDE CRISP WIRE COLUMNS (22 STORIES) */
+  .bottom-band {
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: 308px 1fr;
     gap: 7px;
     min-height: 0;
   }
-  .wire-col {
+  .box {
     background: #FFFFFF;
     border: 1px solid #C2BAA8;
-    padding: 4px 5.5px 4px 5.5px;
+    padding: 4.5px 6px;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     overflow: hidden;
   }
-  .wire-col-hdr {
-    font-size: 8.2px;
+  .box-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 8.6px;
     font-weight: 800;
-    letter-spacing: 0.5px;
-    border-top: 2.5px solid #12233B;
-    border-bottom: 1px solid #D6CFC0;
-    padding: 2px 0 2px 0;
-    margin-bottom: 2.5px;
-    text-transform: uppercase;
+    letter-spacing: 0.55px;
+    color: #12233B;
+    border-bottom: 1.5px solid #12233B;
+    padding-bottom: 2px;
+    margin-bottom: 3px;
     white-space: nowrap;
   }
-  .wire-items {
+  .map-foot {
+    font-size: 7.7px;
+    color: #475569;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .lg-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 2px; vertical-align: middle; }
+  .wire-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    min-height: 0;
+  }
+  .wire-col {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    flex: 1;
+  }
+  .wire-col:first-child {
+    border-right: 1px dotted #D5CEBE;
+    padding-right: 8px;
+  }
+  .w-row {
+    font-size: 8.65px;
+    line-height: 1.16;
+    color: #1A222E;
+  }
+  .w-num {
+    display: inline-block;
+    font-weight: 800;
+    color: #9B1C1C;
+    margin-right: 3px;
+    font-size: 8.6px;
+  }
+  .w-place { color: #0E131B; font-weight: 800; }
+  .w-src { color: #64748B; font-size: 7.7px; font-weight: 700; }
+
+  /* DATE CHECK FOOTER */
+  .date-footer {
+    height: 36px;
+    background: #FFFFFF;
+    border: 1px solid #C2BAA8;
+    border-left: 4px solid #9B1C1C;
+    padding: 3px 7px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     gap: 1.5px;
   }
-  .wire-item {
-    border-bottom: 1px dotted #DDD6C7;
-    padding-bottom: 2px;
-  }
-  .wire-item:last-child { border-bottom: none; padding-bottom: 0; }
-  .wire-h {
-    font-size: 8.45px;
-    font-weight: 800;
-    line-height: 1.13;
+  .df-line1 {
+    font-size: 8.1px;
+    line-height: 1.15;
     color: #11151C;
   }
-  .wire-kicker {
-    color: #1A365D;
-    font-size: 7.7px;
-    letter-spacing: 0.15px;
-  }
-  .wire-d {
-    font-size: 7.65px;
-    line-height: 1.14;
-    color: #2D3748;
-  }
-  .wire-src {
-    font-size: 6.95px;
-    font-weight: 700;
-    color: #64748B;
-  }
-  .inline-pin {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    color: #FFFFFF;
-    font-size: 7.2px;
-    font-weight: 800;
-    margin-right: 3px;
-    vertical-align: 0.5px;
-  }
-
-  /* BAND 6: COLOPHON */
-  .colophon {
-    height: 19px;
-    background: #12233B;
-    color: #E2E8F0;
-    font-size: 7.7px;
-    font-weight: 600;
-    letter-spacing: 0.35px;
-    padding: 0 10px;
+  .df-line1 strong { color: #9B1C1C; letter-spacing: 0.4px; margin-right: 4px; }
+  .df-line2 {
+    font-size: 7.45px;
+    line-height: 1.12;
+    color: #475569;
     display: flex;
     justify-content: space-between;
-    align-items: center;
   }
-  .colophon strong { color: #E5BE73; }
+  .df-line2 strong { color: #12233B; }
 </style>
 </head>
 <body>
   <div class="page">
-    <header class="masthead">
-      <div class="mast-left">
-        <div class="mast-eyebrow">THE WORLD IN ONE DAY · GLOBAL FRONT PAGE · 2026-11-25 (00:00–23:59 UTC)</div>
-        <h1 class="mast-date">${esc(EDITION_META.dateLong)}</h1>
+    <header>
+      <div class="mast-top">
+        <span>THE WORLD IN ONE DAY · 2026-11-25 (00:00–23:59 UTC)</span>
+        <span class="mast-top-r">${EDITION_META.storyCount} VERIFIED STORIES · ${EDITION_META.regionCount} REGIONS · ${EDITION_META.beatCount} BEATS · ALL FROM WEDNESDAY 25 NOV 2026</span>
       </div>
-      <div class="mast-right">
-        <div class="mast-stats">${EDITION_META.storyCount} VERIFIED STORIES · ${EDITION_META.regionCount} REGIONS · ${EDITION_META.beatCount} BEATS</div>
-        <div class="mast-audit">${esc(EDITION_META.dateAudit)}</div>
-      </div>
+      <h1 class="mast-title">${esc(EDITION_META.dateLong)}</h1>
+      <div class="mast-deck">${esc(EDITION_META.deck)}</div>
     </header>
 
-    <section class="flagship-row">
-      ${flagshipHtml}
-    </section>
+    <section class="kpi-row">${kpiHtml}</section>
 
-    <section class="secondary-grid">
-      ${secondaryHtml}
-    </section>
+    <div class="strip-wrap">
+      <div class="reg-bar">${regionBarHtml}</div>
+      <div class="utc-bar"><span class="utc-tag">25 NOV UTC</span><span>${esc(EDITION_META.utcStrip)}</span></div>
+    </div>
 
-    <section class="mid-band">
-      <div class="panel-box">
-        <div class="panel-hdr">
-          <span>WORLD DISPATCH MAP · 18 PINS · 9 REGIONS</span>
-          <span class="legend-inline">
-            <span><i class="lg-dot" style="background:#1A365D"></i>Trade/Policy</span>
-            <span><i class="lg-dot" style="background:#B42318"></i>Conflict/Mkts</span>
-            <span><i class="lg-dot" style="background:#B45309"></i>Disaster</span>
-            <span><i class="lg-dot" style="background:#1B5E4B"></i>Space/Sci</span>
-          </span>
+    <section class="hero-grid">${flagshipHtml}</section>
+
+    <section class="sec-grid">${secondaryHtml}</section>
+
+    <section class="bottom-band">
+      <div class="box">
+        <div class="box-hdr">
+          <span>WHERE IT HAPPENED · STORIES 1–11</span>
+          <span style="font-size:7.4px;color:#475569;font-weight:700;">10 Regions</span>
         </div>
         ${mapSvg}
+        <div class="map-foot">
+          <span><i class="lg-dot" style="background:#1A365D"></i>Trade/Pol</span>
+          <span><i class="lg-dot" style="background:#B42318"></i>War/Mkt</span>
+          <span><i class="lg-dot" style="background:#B45309"></i>Disaster</span>
+          <span><i class="lg-dot" style="background:#1B5E4B"></i>Sci/Space</span>
+        </div>
       </div>
 
-      <div class="right-stack">
-        <div class="panel-box markets-panel">
-          <div class="panel-hdr">
-            <span>MARKETS & MACRO SNAPSHOT · 25 NOV 2026</span>
-            <span style="font-size:7.3px;color:#475569;font-weight:700;text-transform:none;">Reported closes & official releases</span>
-          </div>
-          <div class="metrics-grid">${metricsHtml}</div>
-          <div class="tape-line">Dow &gt;50k (+0.85%) · S&amp;P 500 7,201 (−0.5%) · Gold ~$3,520 · UK Energy Cap £2,166 (+26%) · Venezuela Debt $237.5B</div>
+      <div class="box">
+        <div class="box-hdr">
+          <span>ALSO ON WEDNESDAY 25 NOVEMBER 2026 · 22 MORE VERIFIED STORIES</span>
+          <span style="font-size:7.6px;color:#475569;font-weight:700;">Americas · Europe · MENA · Africa · Asia-Pacific</span>
         </div>
-
-        <div class="panel-box timeline-panel">
-          <div class="panel-hdr">
-            <span>24-HOUR CHRONOLOGY · 25 NOVEMBER 2026 (UTC)</span>
-            <span style="font-size:7.3px;color:#475569;font-weight:700;text-transform:none;">00:00 → 23:59 UTC</span>
-          </div>
-          ${timelineSvg}
+        <div class="wire-grid">
+          <div class="wire-col">${renderWireCol(leftWire)}</div>
+          <div class="wire-col">${renderWireCol(rightWire)}</div>
         </div>
       </div>
     </section>
 
-    <section class="ledger-grid">
-      ${ledgerHtml}
-    </section>
-
-    <footer class="colophon">
-      <span><strong>DATE CHECK:</strong> 25 NOV 2026 ONLY · NO PRE-25 NOV EVENTS · REPORTED FACTS WITHOUT SPECULATION</span>
-      <span><strong>SOURCES:</strong> USTR · OFGEM · BEA · ABS · FCC · EC · WHO · UN · REUTERS · AP · AL JAZEERA · GUARDIAN · CNSA · UEFA</span>
+    <footer class="date-footer">
+      <div class="df-line1"><strong>DATE CHECK:</strong> ${esc(EDITION_META.dateCheck)}</div>
+      <div class="df-line2">
+        <span><strong>OFFICIAL</strong> = authority’s own figure/act · <strong>REPORTED</strong> = press/agency report · <strong>CLAIM</strong> = one side’s account · All 11 illustrations original</span>
+        <span><strong>Sources:</strong> USTR · Ofgem · BEA · ABS · EC · ESA · WHO · UN · OPCW · Reuters · AP · Al Jazeera · Guardian · CNSA · UEFA</span>
+      </div>
     </footer>
   </div>
 </body>
@@ -693,8 +640,8 @@ function main(): void {
   mkdirSync(BUILD_DIR, { recursive: true });
   mkdirSync(dirname(OUT_PNG), { recursive: true });
 
-  const htmlPath = resolve(BUILD_DIR, 'broadsheet.html');
-  const rawPng = resolve(BUILD_DIR, 'raw_1024.png');
+  const htmlPath = resolve(BUILD_DIR, 'broadsheet_v3.html');
+  const rawPng = resolve(BUILD_DIR, 'raw_v3_1024.png');
   writeFileSync(htmlPath, renderHtml(), 'utf8');
 
   const chrome = findChrome();
@@ -713,20 +660,17 @@ function main(): void {
     { stdio: 'pipe', timeout: 30_000 },
   );
 
-  // Optimize PNG and also generate 300px readability preview using uv + Pillow
   const optScript = `
 from PIL import Image
 import pathlib
 raw = pathlib.Path(r"${rawPng}")
 out_png = pathlib.Path(r"${OUT_PNG}")
-prev_300 = pathlib.Path(r"${BUILD_DIR}") / "preview_300.png"
+prev_300 = pathlib.Path(r"${BUILD_DIR}") / "preview_v3_300.png"
 im = Image.open(raw).convert("RGB")
 assert im.size == (1024, 1024), f"Unexpected size {im.size}"
-# Try quantized high-quality palette PNG or optimize RGB PNG under 1 MiB
 im.save(out_png, format="PNG", optimize=True, compress_level=9)
 size_rgb = out_png.stat().st_size
 if size_rgb > 950_000:
-    # Adaptive 256-color or crisp JPEG fallback? Better: test PNG-8 vs high-quality JPEG94!
     q = im.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
     q.save(out_png, format="PNG", optimize=True, compress_level=9)
     print(f"RGB PNG was {size_rgb} bytes -> quantized PNG is {out_png.stat().st_size} bytes")
@@ -741,7 +685,7 @@ print(f"Saved 300px preview: {prev_300}")
   });
 
   const finalSize = statSync(OUT_PNG).size;
-  console.log(`Final entry.png size: ${finalSize} bytes (${(finalSize / 1024).toFixed(1)} KiB)`);
+  console.log(`Final v3 entry.png size: ${finalSize} bytes (${(finalSize / 1024).toFixed(1)} KiB)`);
 }
 
 main();
